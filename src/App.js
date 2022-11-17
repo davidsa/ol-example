@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import VectorSource from "ol/source/Vector";
+import Overlay from "ol/Overlay";
 import Map from "ol/Map";
 import View from "ol/View";
 import XYZ from "ol/source/XYZ";
@@ -7,15 +8,16 @@ import { fromLonLat } from "ol/proj";
 import { Point } from "ol/geom";
 import Feature from "ol/Feature";
 import { Heatmap as HeatmapLayer, Tile as TileLayer } from "ol/layer";
+import "ol/ol.css";
 import "./App.css";
 
 const C = 0.85;
 
 function App() {
   const mapRef = useRef(); // { current: null }
-  const [showTooltip, setShowTooltip] = useState(false);
-  const [coordinates, setCoordinates] = useState({ x: 0, y: 0 });
-  const [tooltipData, setTooltipData] = useState();
+  const tooltipRef = useRef();
+  const overlayRef = useRef();
+  const [data, setData] = useState({});
 
   useEffect(() => {
     const feature1 = new Feature({
@@ -59,6 +61,18 @@ function App() {
       },
     });
 
+    const overlay = new Overlay({
+      element: tooltipRef.current,
+      autoPan: {
+        animation: {
+          duration: 250,
+        },
+      },
+    });
+
+    // this.overlay = overlay
+    overlayRef.current = overlay;
+
     // Layer Imagen Mapa
     const mapLayer = new TileLayer({
       source: new XYZ({
@@ -69,17 +83,16 @@ function App() {
     const map = new Map({
       target: mapRef.current, // Elemento donde lo voy a montar
       layers: [mapLayer, heatMapLayer],
+      overlays: [overlay],
       view: new View({
         center: fromLonLat([-72, 4]),
         zoom: 5,
       }),
     });
 
-    map.on("click", (e) => {
-      const {
-        pixel,
-        originalEvent: { x, y },
-      } = e;
+    map.on("singleclick", (e) => {
+      const { coordinate, pixel } = e;
+
       const [feature] = map.getFeaturesAtPixel(pixel);
 
       if (feature) {
@@ -87,33 +100,23 @@ function App() {
         const voltage = feature.get("voltage");
 
         // Show tooltip and prepare coordinates and data
-        setShowTooltip(true);
-        setCoordinates({ x, y });
-        setTooltipData({ name, voltage });
+        setData({ name, voltage });
+        overlay.setPosition(coordinate);
         return;
       }
 
-      // Hide when click outside
-      setShowTooltip(false);
-    });
-
-    map.on("movestart", () => {
-      // Hide when scrolling the map
-      setShowTooltip(false);
+      overlay.setPosition();
     });
   }, []);
 
   return (
-    <div className="map" ref={mapRef}>
-      {showTooltip && (
-        <div
-          className="tooltip"
-          style={{ top: coordinates.y, left: coordinates.x }}
-        >
-          {tooltipData.name}: {tooltipData.voltage}
-        </div>
-      )}
-    </div>
+    <>
+      <div className="map" ref={mapRef}></div>
+      <div className="tooltip" ref={tooltipRef}>
+        <button onClick={() => overlayRef.current.setPosition()}>Close</button>
+        {data?.name}: {data?.voltage}
+      </div>
+    </>
   );
 }
 
